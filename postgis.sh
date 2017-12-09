@@ -16,6 +16,7 @@ SQLEND
 	CREATE EXTENSION fuzzystrmatch;
 	CREATE EXTENSION postgis_tiger_geocoder;
 	CREATE EXTENSION pgrouting;
+	CREATE EXTENSION hstore;
 SQLEND
 
 # Populate mn_gis with datasets
