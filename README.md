@@ -8,27 +8,27 @@ A Docker container which initializes a PostGIS 2.4 and pgrouting-enabled Postgre
 
 This database requires the use of Docker. You can get Docker for [Windows](https://www.docker.com/docker-windows), [Mac](https://www.docker.com/docker-mac), or several Linux distributions. After installing the software, open up a terminal. You can download this repository's auto-built image from DockerHub with the following command:
 
-`
+```
 docker pull dylrich/mn-postgis:latest
-`
+```
 
 Once the image has been downloaded, you can launch the Docker container and create a new PostGIS database with:
 
-`
+```
 docker run --name mn-gis -e POSTGRES_PASSWORD=gis -d dylrich/mn-postgis:latest
-`
+```
 
 The above command launches a Docker image running in the background on your computer. Because this image is an extension of the PostgreSQL 10 official image, it will run under Ubuntu Linux and expose port 5432 by default. If you have PostgreSQL already installed and running on your system, this can make connecting from a utility like pgAdmin difficult. To get around this, I would suggest changing the port that is exposed from the docker image like so:
 
-`
+```
 docker run --name mn-gis -e POSTGRES_PASSWORD=gis -p 26915:5432 -d dylrich/mn-postgis:latest
-`
+```
 
 Now you may detect the database on port 26915 from your own computer at the default IP address of 127.0.0.1. Alternatively, you can connect to the database from another image with the following command:
 
-`
+```
 docker run -it --rm --link mn-gis:postgres postgres psql -h postgres -U postgres -p 5432 -W gis
-`
+```
 
 ### Reference Information
 
@@ -78,15 +78,74 @@ This section contains some example queries which you can use as a cookbook for o
 
 ### Working with Census demographic data
 
-`
-create view dp_2010 as (select * from (select gid as tract_gid, countyfp10, tractce10, geoid10, name10, geom as tract_geom from tracts_2010) as tract, dp_tract_2010 dp where dp."GEO.id2" = tract.geoid10);
-`
+```sql
+CREATE view dp_2010 AS (SELECT * FROM (SELECT gid AS tract_gid, countyfp10, tractce10, geoid10, name10, geom AS tract_geom FROM tracts_2010) AS tract, dp_tract_2010 dp WHERE dp."GEO.id2" = tract.geoid10);
+```
 
-`
-create view metro_dp as (select * from dp_2010 d, (select gid as co_gid, co_code, co_name, geom as co_geom from counties) c where d.countyfp10 = c.co_code);
-`
+```SQL
+CREATE view metro_dp AS (SELECT * FROM dp_2010 d, (SELECT gid AS co_gid, co_code, co_name, geom AS co_geom FROM counties) AS c WHERE d.countyfp10 = c.co_code);
+```
 
 ### Working with pgrouting and the road network
 
+A pre-built routing network is available in the `road_network` 
 
-### Using rasters
+1. Adjust the road network's `cost` attribute to be in minutes instead of hours
+
+```sql
+CREATE VIEW road_network_mins AS(
+ SELECT road_network.id,
+    road_network.source,
+    road_network.target,
+    road_network.cost * 60 AS cost,
+    road_network.reverse_cost * 60 AS reverse_cost
+   FROM road_network
+   );
+```
+
+2. Create a table of all nodes in the network to use for the convex hull
+
+```sql
+CREATE VIEW nodes AS(
+ SELECT road_network.source AS node,
+    st_startpoint(road_network.geom_way) AS geom
+   FROM road_network
+UNION
+ SELECT road_network.target AS node,
+    st_endpoint(road_network.geom_way) AS geom
+   FROM road_network);
+``` 
+
+3. Find the geometry for the point location you are interested in
+
+```sql
+CREATE VIEW target_center AS(
+SELECT addresses.address,
+    addresses.geom
+   FROM (SELECT concat(parcel_points.bldg_num, ' ', parcel_points.streetname) AS address,
+    parcel_points.geom FROM parcel_points) addresses
+  WHERE addresses.address = '600 1ST AVE N');
+```
+
+
+
+4. Find the node closest to your point location which you can use as a starting point
+
+```sql
+CREATE VIEW tc_nn AS (
+SELECT nodes.node, nodes.geom, target_center.address
+FROM nodes, target_center
+ORDER BY ST_Distance(nodes.geom,target_center.geom) 
+LIMIT 1);
+```
+
+5. Create a convex hull of all nodes where the driving time is less than 10 minutes
+
+```sql
+SELECT ST_ConvexHull(pt.geom) FROM (SELECT dist.seq, dist.node, dist.edge, dist.cost, dist.agg_cost, nodes.geom FROM PGR_DrivingDistance(
+  'SELECT id, source, target, cost FROM edges',
+  (SELECT tc_nn.geom FROM tc_nn), 10000000) dist, road_nodes nodes
+WHERE dist.node = nodes.node AND agg_cost < 10) AS pt
+```
+
+### Working with rasters
