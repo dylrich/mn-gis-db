@@ -45,8 +45,7 @@ BEGIN;
 \i /usr/local/bin/data/transit_routes.sql
 \i /usr/local/bin/data/transit_stops.sql
 
-
-
-
 COMMIT;
 SQLEND
+
+cat /usr/local/bin/data/parcel_points* | psql --username="$POSTGRES_USER" --dbname=mn_gis
