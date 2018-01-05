@@ -1,5 +1,5 @@
 # MN-PostGIS-Docker
-A Docker container which initializes a PostGIS 2.4 and pgrouting-enabled PostgreSQL 10 database and is pre-populated with curated datasets from the Minneapolis/Saint Paul metro area. Datasets are set up to be easily queried.
+A Docker container which initializes a PostGIS 2.4 and pgrouting-enabled PostgreSQL 10 database and is pre-populated with curated datasets from the Minneapolis/Saint Paul metro area. Datasets are set up to be easily queried. This repository can be used as a learning ground for playing with spatial databases or as an all-in-one spatial data distribution service if you are interested in data from Minneapolis/Saint Paul. Schema documentation is currently incomplete, and in the future more datasets will be added, particularly those from the Census Bureau. 
 
 # Usage
 
